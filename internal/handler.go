@@ -18,12 +18,18 @@ type HandlerOptions struct {
 	gzipCompressionJitter        int
 	forwardHeaders               bool
 	logRequests                  bool
+	staticFilePath               string
 }
 
 func NewHandler(options HandlerOptions) http.Handler {
 	handler := NewProxyHandler(options.targetUrl, options.badGatewayPage, options.forwardHeaders)
 	handler = NewCacheHandler(options.cache, options.maxCacheableResponseBody, handler)
 	handler = NewSendfileHandler(options.xSendfileEnabled, handler)
+
+	if options.staticFilePath != "" {
+		handler = NewStaticFileHandler(options.staticFilePath, handler)
+	}
+
 	handler = NewRequestStartHandler(handler)
 
 	if options.gzipCompressionEnabled {

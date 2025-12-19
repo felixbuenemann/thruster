@@ -26,6 +26,7 @@ const (
 	defaultACMEDirectoryURL = acme.LetsEncryptURL
 	defaultStoragePath      = "./storage/thruster"
 	defaultBadGatewayPage   = "./public/502.html"
+	defaultStaticFilePath   = "./public"
 
 	defaultHttpPort         = 80
 	defaultHttpsPort        = 443
@@ -54,6 +55,7 @@ type Config struct {
 	GzipCompressionDisableOnAuth bool
 	GzipCompressionJitter        int
 	MaxRequestBody               int
+	StaticFilePath               string
 
 	TLSDomains       []string
 	ACMEDirectoryURL string
@@ -98,6 +100,7 @@ func NewConfig() (*Config, error) {
 		GzipCompressionDisableOnAuth: getEnvBool("GZIP_COMPRESSION_DISABLE_ON_AUTH", defaultGzipCompressionDisableOnAuth),
 		GzipCompressionJitter:        getEnvInt("GZIP_COMPRESSION_JITTER", defaultGzipCompressionJitter),
 		MaxRequestBody:               getEnvInt("MAX_REQUEST_BODY", defaultMaxRequestBody),
+		StaticFilePath:               getEnvString("STATIC_FILE_PATH", defaultStaticFilePath),
 
 		TLSDomains:       getEnvStrings("TLS_DOMAIN", []string{}),
 		ACMEDirectoryURL: getEnvString("ACME_DIRECTORY", defaultACMEDirectoryURL),
