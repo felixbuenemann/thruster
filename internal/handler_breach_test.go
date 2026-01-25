@@ -27,12 +27,12 @@ func TestHandler_BreachMitigation(t *testing.T) {
 	cache := NewMemoryCache(1024, 1024)
 
 	opts := HandlerOptions{
-		targetUrl:                    upstreamURL,
-		cache:                        cache,
-		gzipCompressionEnabled:       true,
-		gzipCompressionDisableOnAuth: false,
-		gzipCompressionJitter:        32,
-		brotliCompressionEnabled:     false, // Disable brotli for gzip-specific tests
+		targetUrl:                upstreamURL,
+		cache:                    cache,
+		gzipCompressionEnabled:   true,
+		brotliCompressionEnabled: false, // Disable brotli for gzip-specific tests
+		compressionDisableOnAuth: false,
+		compressionJitter:        32,
 	}
 
 	handler := NewHandler(opts)
@@ -79,7 +79,7 @@ func TestHandler_BreachMitigation(t *testing.T) {
 	t.Run("Authenticated request is NOT compressed when guard is ENABLED", func(t *testing.T) {
 		// Create a handler with the guard enabled
 		guardOpts := opts
-		guardOpts.gzipCompressionDisableOnAuth = true
+		guardOpts.compressionDisableOnAuth = true
 		guardHandler := NewHandler(guardOpts)
 
 		req := httptest.NewRequest("GET", "/", nil)

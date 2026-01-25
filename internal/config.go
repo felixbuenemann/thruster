@@ -38,9 +38,8 @@ const (
 	defaultLogLevel    = slog.LevelInfo
 	defaultLogRequests = true
 
-	defaultGzipCompressionDisableOnAuth   = false
-	defaultGzipCompressionJitter          = 32
-	defaultBrotliCompressionDisableOnAuth = false
+	defaultCompressionDisableOnAuth = false
+	defaultCompressionJitter        = 32
 )
 
 type Config struct {
@@ -48,15 +47,14 @@ type Config struct {
 	UpstreamCommand string
 	UpstreamArgs    []string
 
-	CacheSizeBytes                 int
-	MaxCacheItemSizeBytes          int
-	XSendfileEnabled               bool
-	GzipCompressionEnabled         bool
-	GzipCompressionDisableOnAuth   bool
-	GzipCompressionJitter          int
-	BrotliCompressionEnabled       bool
-	BrotliCompressionDisableOnAuth bool
-	MaxRequestBody                 int
+	CacheSizeBytes            int
+	MaxCacheItemSizeBytes     int
+	XSendfileEnabled          bool
+	GzipCompressionEnabled    bool
+	BrotliCompressionEnabled  bool
+	CompressionDisableOnAuth  bool
+	CompressionJitter         int
+	MaxRequestBody            int
 
 	TLSDomains       []string
 	ACMEDirectoryURL string
@@ -94,15 +92,14 @@ func NewConfig() (*Config, error) {
 		UpstreamCommand: os.Args[1],
 		UpstreamArgs:    os.Args[2:],
 
-		CacheSizeBytes:               getEnvInt("CACHE_SIZE", defaultCacheSize),
-		MaxCacheItemSizeBytes:        getEnvInt("MAX_CACHE_ITEM_SIZE", defaultMaxCacheItemSizeBytes),
-		XSendfileEnabled:             getEnvBool("X_SENDFILE_ENABLED", true),
-		GzipCompressionEnabled:         getEnvBool("GZIP_COMPRESSION_ENABLED", true),
-		GzipCompressionDisableOnAuth:   getEnvBool("GZIP_COMPRESSION_DISABLE_ON_AUTH", defaultGzipCompressionDisableOnAuth),
-		GzipCompressionJitter:          getEnvInt("GZIP_COMPRESSION_JITTER", defaultGzipCompressionJitter),
-		BrotliCompressionEnabled:       getEnvBool("BROTLI_COMPRESSION_ENABLED", true),
-		BrotliCompressionDisableOnAuth: getEnvBool("BROTLI_COMPRESSION_DISABLE_ON_AUTH", defaultBrotliCompressionDisableOnAuth),
-		MaxRequestBody:                 getEnvInt("MAX_REQUEST_BODY", defaultMaxRequestBody),
+		CacheSizeBytes:           getEnvInt("CACHE_SIZE", defaultCacheSize),
+		MaxCacheItemSizeBytes:    getEnvInt("MAX_CACHE_ITEM_SIZE", defaultMaxCacheItemSizeBytes),
+		XSendfileEnabled:         getEnvBool("X_SENDFILE_ENABLED", true),
+		GzipCompressionEnabled:   getEnvBool("GZIP_COMPRESSION_ENABLED", true),
+		BrotliCompressionEnabled: getEnvBool("BROTLI_COMPRESSION_ENABLED", true),
+		CompressionDisableOnAuth: getEnvBoolWithFallback("COMPRESSION_DISABLE_ON_AUTH", "GZIP_COMPRESSION_DISABLE_ON_AUTH", defaultCompressionDisableOnAuth),
+		CompressionJitter:        getEnvIntWithFallback("COMPRESSION_JITTER", "GZIP_COMPRESSION_JITTER", defaultCompressionJitter),
+		MaxRequestBody:           getEnvInt("MAX_REQUEST_BODY", defaultMaxRequestBody),
 
 		TLSDomains:       getEnvStrings("TLS_DOMAIN", []string{}),
 		ACMEDirectoryURL: getEnvString("ACME_DIRECTORY", defaultACMEDirectoryURL),
@@ -214,4 +211,24 @@ func getEnvBool(key string, defaultValue bool) bool {
 	}
 
 	return boolValue
+}
+
+// getEnvBoolWithFallback tries the primary key first, then falls back to the legacy key
+func getEnvBoolWithFallback(primaryKey, fallbackKey string, defaultValue bool) bool {
+	if value, ok := findEnv(primaryKey); ok {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
+	return getEnvBool(fallbackKey, defaultValue)
+}
+
+// getEnvIntWithFallback tries the primary key first, then falls back to the legacy key
+func getEnvIntWithFallback(primaryKey, fallbackKey string, defaultValue int) int {
+	if value, ok := findEnv(primaryKey); ok {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return getEnvInt(fallbackKey, defaultValue)
 }

@@ -238,7 +238,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("applies jitter when configured with gzip", func(t *testing.T) {
-		opts := CompressionOptions{GzipEnabled: true, GzipJitter: 32, BrotliEnabled: false}
+		opts := CompressionOptions{GzipEnabled: true, BrotliEnabled: false, Jitter: 32}
 		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
@@ -261,8 +261,8 @@ func TestCompressionHandler(t *testing.T) {
 		assert.True(t, strings.HasPrefix(string(body), largeBody))
 	})
 
-	t.Run("wraps with guard when gzip disableOnAuth is true", func(t *testing.T) {
-		opts := CompressionOptions{GzipEnabled: true, GzipDisableOnAuth: true, BrotliEnabled: true, BrotliDisableOnAuth: true}
+	t.Run("wraps with guard when disableOnAuth is true", func(t *testing.T) {
+		opts := CompressionOptions{GzipEnabled: true, BrotliEnabled: true, DisableOnAuth: true}
 		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)

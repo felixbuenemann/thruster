@@ -47,23 +47,22 @@ var brotliWriterPool = sync.Pool{
 
 // CompressionOptions configures the compression handler
 type CompressionOptions struct {
-	GzipEnabled         bool
-	GzipDisableOnAuth   bool
-	GzipJitter          int
-	BrotliEnabled       bool
-	BrotliDisableOnAuth bool
+	GzipEnabled   bool
+	BrotliEnabled bool
+	DisableOnAuth bool
+	Jitter        int
 }
 
 func NewCompressionHandler(opts CompressionOptions, next http.Handler) http.Handler {
 	handler := &compressionHandler{
 		gzipEnabled:   opts.GzipEnabled,
-		gzipJitter:    opts.GzipJitter,
 		brotliEnabled: opts.BrotliEnabled,
+		jitter:        opts.Jitter,
 		next:          next,
 	}
 
-	// Apply compression guard if either encoding requires it
-	if (opts.GzipEnabled && opts.GzipDisableOnAuth) || (opts.BrotliEnabled && opts.BrotliDisableOnAuth) {
+	// Apply compression guard if any compression is enabled and DisableOnAuth is set
+	if opts.DisableOnAuth && (opts.GzipEnabled || opts.BrotliEnabled) {
 		return NewCompressionGuardHandler(handler)
 	}
 
@@ -72,8 +71,8 @@ func NewCompressionHandler(opts CompressionOptions, next http.Handler) http.Hand
 
 type compressionHandler struct {
 	gzipEnabled   bool
-	gzipJitter    int
 	brotliEnabled bool
+	jitter        int
 	next          http.Handler
 }
 
@@ -88,7 +87,7 @@ func (h *compressionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cw := &compressResponseWriter{
 		ResponseWriter: w,
 		encoding:       encoding,
-		gzipJitter:     h.gzipJitter,
+		jitter:         h.jitter,
 		minSize:        minCompressSize,
 	}
 	defer cw.Close()
@@ -187,7 +186,7 @@ func parseEncodingWithQuality(s string) (encoding string, quality float64) {
 type compressResponseWriter struct {
 	http.ResponseWriter
 	encoding    string
-	gzipJitter  int
+	jitter      int
 	minSize     int
 	writer      io.WriteCloser
 	wroteHeader bool
@@ -270,7 +269,7 @@ func (w *compressResponseWriter) startCompression() {
 	case encodingGzip:
 		gw := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(w.ResponseWriter)
-		w.writer = &gzipWriterWithJitter{Writer: gw, jitter: w.gzipJitter}
+		w.writer = &gzipWriterWithJitter{Writer: gw, jitter: w.jitter}
 	}
 
 	w.flushHeader()

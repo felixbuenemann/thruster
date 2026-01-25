@@ -7,19 +7,18 @@ import (
 )
 
 type HandlerOptions struct {
-	badGatewayPage                 string
-	cache                          Cache
-	maxCacheableResponseBody       int
-	maxRequestBody                 int
-	targetUrl                      *url.URL
-	xSendfileEnabled               bool
-	gzipCompressionEnabled         bool
-	gzipCompressionDisableOnAuth   bool
-	gzipCompressionJitter          int
-	brotliCompressionEnabled       bool
-	brotliCompressionDisableOnAuth bool
-	forwardHeaders                 bool
-	logRequests                    bool
+	badGatewayPage           string
+	cache                    Cache
+	maxCacheableResponseBody int
+	maxRequestBody           int
+	targetUrl                *url.URL
+	xSendfileEnabled         bool
+	gzipCompressionEnabled   bool
+	brotliCompressionEnabled bool
+	compressionDisableOnAuth bool
+	compressionJitter        int
+	forwardHeaders           bool
+	logRequests              bool
 }
 
 func NewHandler(options HandlerOptions) http.Handler {
@@ -30,11 +29,10 @@ func NewHandler(options HandlerOptions) http.Handler {
 
 	if options.gzipCompressionEnabled || options.brotliCompressionEnabled {
 		handler = NewCompressionHandler(CompressionOptions{
-			GzipEnabled:         options.gzipCompressionEnabled,
-			GzipDisableOnAuth:   options.gzipCompressionDisableOnAuth,
-			GzipJitter:          options.gzipCompressionJitter,
-			BrotliEnabled:       options.brotliCompressionEnabled,
-			BrotliDisableOnAuth: options.brotliCompressionDisableOnAuth,
+			GzipEnabled:      options.gzipCompressionEnabled,
+			BrotliEnabled:    options.brotliCompressionEnabled,
+			DisableOnAuth:    options.compressionDisableOnAuth,
+			Jitter:           options.compressionJitter,
 		}, handler)
 	}
 
