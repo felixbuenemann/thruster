@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klauspost/compress/brotli"
+	"github.com/andybalholm/brotli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -249,16 +249,16 @@ func TestCompressionHandler(t *testing.T) {
 
 		require.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
 
-		// Verify the response is valid gzip
+		// Verify the response is valid gzip and content is unchanged
+		// (gzip jitter is added via header Comment field, not content)
 		reader, err := gzip.NewReader(rr.Body)
 		require.NoError(t, err)
 		defer reader.Close()
 		body, err := io.ReadAll(reader)
 		require.NoError(t, err)
 
-		// The decompressed body should contain our original content
-		// (jitter adds extra bytes but doesn't corrupt the original data)
-		assert.True(t, strings.HasPrefix(string(body), largeBody))
+		// Decompressed body should exactly match original content
+		assert.Equal(t, largeBody, string(body))
 	})
 
 	t.Run("wraps with guard when disableOnAuth is true", func(t *testing.T) {

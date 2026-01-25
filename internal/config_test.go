@@ -134,8 +134,8 @@ func TestConfig_override_defaults_with_env_vars(t *testing.T) {
 	assert.Equal(t, "https://acme-staging-v02.api.letsencrypt.org/directory", c.ACMEDirectoryURL)
 	assert.Equal(t, false, c.LogRequests)
 	assert.Equal(t, true, c.H2CEnabled)
-	assert.Equal(t, true, c.GzipCompressionDisableOnAuth)
-	assert.Equal(t, 64, c.GzipCompressionJitter)
+	assert.Equal(t, true, c.CompressionDisableOnAuth)
+	assert.Equal(t, 64, c.CompressionJitter)
 }
 
 func TestConfig_override_defaults_with_env_vars_using_prefix(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/klauspost/compress/brotli"
+	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
 )
 
@@ -265,11 +265,28 @@ func (w *compressResponseWriter) startCompression() {
 	case encodingBrotli:
 		bw := brotliWriterPool.Get().(*brotli.Writer)
 		bw.Reset(w.ResponseWriter)
-		w.writer = &writerWithJitter{writer: bw, jitter: w.jitter}
+		w.writer = &brotliWriterWithJitter{
+			writer:     bw,
+			underlying: w.ResponseWriter,
+			jitter:     w.jitter,
+		}
 	case encodingGzip:
 		gw := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(w.ResponseWriter)
-		w.writer = &writerWithJitter{writer: gw, jitter: w.jitter}
+		// Add jitter via gzip header comment field - this increases
+		// compressed size without affecting decompressed content.
+		// Use spaces (valid Latin-1 characters) for the comment.
+		if w.jitter > 0 {
+			jitterSize := rand.Intn(w.jitter + 1)
+			if jitterSize > 0 {
+				jitterBytes := make([]byte, jitterSize)
+				for i := range jitterBytes {
+					jitterBytes[i] = ' '
+				}
+				gw.Header.Comment = string(jitterBytes)
+			}
+		}
+		w.writer = gw
 	}
 
 	w.flushHeader()
@@ -315,16 +332,14 @@ func (w *compressResponseWriter) Close() error {
 		err := w.writer.Close()
 
 		// Return writers to pools
-		if wj, ok := w.writer.(*writerWithJitter); ok {
-			switch w.encoding {
-			case encodingBrotli:
-				if bw, ok := wj.writer.(*brotli.Writer); ok {
-					brotliWriterPool.Put(bw)
-				}
-			case encodingGzip:
-				if gw, ok := wj.writer.(*gzip.Writer); ok {
-					gzipWriterPool.Put(gw)
-				}
+		switch w.encoding {
+		case encodingBrotli:
+			if bwj, ok := w.writer.(*brotliWriterWithJitter); ok {
+				brotliWriterPool.Put(bwj.writer)
+			}
+		case encodingGzip:
+			if gw, ok := w.writer.(*gzip.Writer); ok {
+				gzipWriterPool.Put(gw)
 			}
 		}
 
@@ -363,28 +378,41 @@ func (w *compressResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 
-// writerWithJitter wraps a compressor to add random jitter for BREACH mitigation
-type writerWithJitter struct {
-	writer      io.WriteCloser
-	jitter      int
-	jitterAdded bool
+// brotliWriterWithJitter wraps a brotli writer to add random jitter for BREACH mitigation.
+// Unlike gzip which supports header comments, brotli requires adding padding bytes
+// after the compressed stream. These trailing bytes are ignored by decompressors.
+type brotliWriterWithJitter struct {
+	writer     *brotli.Writer
+	underlying io.Writer
+	jitter     int
 }
 
-func (w *writerWithJitter) Write(p []byte) (int, error) {
+func (w *brotliWriterWithJitter) Write(p []byte) (int, error) {
 	return w.writer.Write(p)
 }
 
-func (w *writerWithJitter) Close() error {
-	// Add jitter before closing
-	if w.jitter > 0 && !w.jitterAdded {
-		w.jitterAdded = true
+func (w *brotliWriterWithJitter) Close() error {
+	// Close the brotli writer first to finalize the compressed stream
+	err := w.writer.Close()
+	if err != nil {
+		return err
+	}
+
+	// Add jitter bytes after the brotli stream ends.
+	// These bytes are written directly to the underlying writer and
+	// will be ignored by brotli decompressors (trailing data after stream end).
+	if w.jitter > 0 {
 		jitterSize := rand.Intn(w.jitter + 1)
 		if jitterSize > 0 {
 			jitterBytes := make([]byte, jitterSize)
-			w.writer.Write(jitterBytes)
+			for i := range jitterBytes {
+				jitterBytes[i] = ' '
+			}
+			w.underlying.Write(jitterBytes)
 		}
 	}
-	return w.writer.Close()
+
+	return nil
 }
 
 // isCompressibleContentType returns true if the content type should be compressed
