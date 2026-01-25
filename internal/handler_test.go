@@ -311,6 +311,7 @@ func handlerOptions(targetUrl string) HandlerOptions {
 		targetUrl:                url,
 		xSendfileEnabled:         true,
 		gzipCompressionEnabled:   true,
+		brotliCompressionEnabled: true,
 		maxCacheableResponseBody: 1024,
 		badGatewayPage:           "",
 		forwardHeaders:           true,

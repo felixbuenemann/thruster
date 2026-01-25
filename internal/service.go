@@ -19,17 +19,19 @@ func NewService(config *Config) *Service {
 
 func (s *Service) Run() int {
 	handlerOptions := HandlerOptions{
-		cache:                        s.cache(),
-		targetUrl:                    s.targetUrl(),
-		xSendfileEnabled:             s.config.XSendfileEnabled,
-		gzipCompressionEnabled:       s.config.GzipCompressionEnabled,
-		maxCacheableResponseBody:     s.config.MaxCacheItemSizeBytes,
-		maxRequestBody:               s.config.MaxRequestBody,
-		badGatewayPage:               s.config.BadGatewayPage,
-		forwardHeaders:               s.config.ForwardHeaders,
-		logRequests:                  s.config.LogRequests,
-		gzipCompressionDisableOnAuth: s.config.GzipCompressionDisableOnAuth,
-		gzipCompressionJitter:        s.config.GzipCompressionJitter,
+		cache:                          s.cache(),
+		targetUrl:                      s.targetUrl(),
+		xSendfileEnabled:               s.config.XSendfileEnabled,
+		gzipCompressionEnabled:         s.config.GzipCompressionEnabled,
+		gzipCompressionDisableOnAuth:   s.config.GzipCompressionDisableOnAuth,
+		gzipCompressionJitter:          s.config.GzipCompressionJitter,
+		brotliCompressionEnabled:       s.config.BrotliCompressionEnabled,
+		brotliCompressionDisableOnAuth: s.config.BrotliCompressionDisableOnAuth,
+		maxCacheableResponseBody:       s.config.MaxCacheItemSizeBytes,
+		maxRequestBody:                 s.config.MaxRequestBody,
+		badGatewayPage:                 s.config.BadGatewayPage,
+		forwardHeaders:                 s.config.ForwardHeaders,
+		logRequests:                    s.config.LogRequests,
 	}
 
 	handler := NewHandler(handlerOptions)

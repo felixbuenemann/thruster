@@ -38,8 +38,9 @@ const (
 	defaultLogLevel    = slog.LevelInfo
 	defaultLogRequests = true
 
-	defaultGzipCompressionDisableOnAuth = false
-	defaultGzipCompressionJitter        = 32
+	defaultGzipCompressionDisableOnAuth   = false
+	defaultGzipCompressionJitter          = 32
+	defaultBrotliCompressionDisableOnAuth = false
 )
 
 type Config struct {
@@ -47,13 +48,15 @@ type Config struct {
 	UpstreamCommand string
 	UpstreamArgs    []string
 
-	CacheSizeBytes               int
-	MaxCacheItemSizeBytes        int
-	XSendfileEnabled             bool
-	GzipCompressionEnabled       bool
-	GzipCompressionDisableOnAuth bool
-	GzipCompressionJitter        int
-	MaxRequestBody               int
+	CacheSizeBytes                 int
+	MaxCacheItemSizeBytes          int
+	XSendfileEnabled               bool
+	GzipCompressionEnabled         bool
+	GzipCompressionDisableOnAuth   bool
+	GzipCompressionJitter          int
+	BrotliCompressionEnabled       bool
+	BrotliCompressionDisableOnAuth bool
+	MaxRequestBody                 int
 
 	TLSDomains       []string
 	ACMEDirectoryURL string
@@ -94,10 +97,12 @@ func NewConfig() (*Config, error) {
 		CacheSizeBytes:               getEnvInt("CACHE_SIZE", defaultCacheSize),
 		MaxCacheItemSizeBytes:        getEnvInt("MAX_CACHE_ITEM_SIZE", defaultMaxCacheItemSizeBytes),
 		XSendfileEnabled:             getEnvBool("X_SENDFILE_ENABLED", true),
-		GzipCompressionEnabled:       getEnvBool("GZIP_COMPRESSION_ENABLED", true),
-		GzipCompressionDisableOnAuth: getEnvBool("GZIP_COMPRESSION_DISABLE_ON_AUTH", defaultGzipCompressionDisableOnAuth),
-		GzipCompressionJitter:        getEnvInt("GZIP_COMPRESSION_JITTER", defaultGzipCompressionJitter),
-		MaxRequestBody:               getEnvInt("MAX_REQUEST_BODY", defaultMaxRequestBody),
+		GzipCompressionEnabled:         getEnvBool("GZIP_COMPRESSION_ENABLED", true),
+		GzipCompressionDisableOnAuth:   getEnvBool("GZIP_COMPRESSION_DISABLE_ON_AUTH", defaultGzipCompressionDisableOnAuth),
+		GzipCompressionJitter:          getEnvInt("GZIP_COMPRESSION_JITTER", defaultGzipCompressionJitter),
+		BrotliCompressionEnabled:       getEnvBool("BROTLI_COMPRESSION_ENABLED", true),
+		BrotliCompressionDisableOnAuth: getEnvBool("BROTLI_COMPRESSION_DISABLE_ON_AUTH", defaultBrotliCompressionDisableOnAuth),
+		MaxRequestBody:                 getEnvInt("MAX_REQUEST_BODY", defaultMaxRequestBody),
 
 		TLSDomains:       getEnvStrings("TLS_DOMAIN", []string{}),
 		ACMEDirectoryURL: getEnvString("ACME_DIRECTORY", defaultACMEDirectoryURL),

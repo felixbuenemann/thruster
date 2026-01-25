@@ -78,9 +78,11 @@ environment variables that you can set.
 | `TARGET_PORT`               | The port that your Puma server should run on. Thruster will set `PORT` to this value when starting your server. | 3000 |
 | `CACHE_SIZE`                | The size of the HTTP cache in bytes. | 64MB |
 | `MAX_CACHE_ITEM_SIZE`       | The maximum size of a single item in the HTTP cache in bytes. | 1MB |
-| `GZIP_COMPRESSION_ENABLED`  | Whether to enable compression (Brotli and gzip) for responses. Brotli is preferred when supported by the client. Set to `0` or `false` to disable. | Enabled |
-| `GZIP_COMPRESSION_DISABLE_ON_AUTH` | If set to `true`, disable compression for authenticated requests with `Cookie`, `Authorization`, or `X-Csrf-Token` headers. | `false` |
+| `GZIP_COMPRESSION_ENABLED`  | Whether to enable gzip compression for responses. Set to `0` or `false` to disable. | Enabled |
+| `GZIP_COMPRESSION_DISABLE_ON_AUTH` | If set to `true`, disable gzip compression for authenticated requests with `Cookie`, `Authorization`, or `X-Csrf-Token` headers. | `false` |
 | `GZIP_COMPRESSION_JITTER`   | The amount of random jitter (in bytes) to add to gzip compressed response size to mitigate BREACH attacks. Set to `0` to disable. | 32 |
+| `BROTLI_COMPRESSION_ENABLED` | Whether to enable Brotli compression for responses. Brotli is preferred over gzip when both are supported by the client. Set to `0` or `false` to disable. | Enabled |
+| `BROTLI_COMPRESSION_DISABLE_ON_AUTH` | If set to `true`, disable Brotli compression for authenticated requests with `Cookie`, `Authorization`, or `X-Csrf-Token` headers. | `false` |
 | `X_SENDFILE_ENABLED`        | Whether to enable X-Sendfile support. Set to `0` or `false` to disable. | Enabled |
 | `MAX_REQUEST_BODY`          | The maximum size of a request body in bytes. Requests larger than this size will be refused; `0` means no maximum size is enforced. | `0` |
 | `STORAGE_PATH`              | The path to store Thruster's internal state. Provisioned TLS certificates will be stored here, so that they will not need to be requested every time your application is started. | `./storage/thruster` |
@@ -114,6 +116,6 @@ Thruster supports both Brotli and gzip compression. When the client supports bot
 Thruster includes built-in mitigation for the [BREACH attack](https://breachattack.com/), which allows attackers to extract secrets from compressed encrypted traffic.
 
 1.  **Random Jitter (Enabled by Default)**: Thruster adds a random amount of "jitter" (padding) to the size of gzip compressed responses. This makes it significantly harder for attackers to infer the content based on the compressed size. The default jitter is 32 bytes, controlled by `GZIP_COMPRESSION_JITTER`.
-2.  **Compression Guard (Optional)**: For higher security, you can disable compression entirely for authenticated requests (requests containing `Cookie`, `Authorization`, or `X-Csrf-Token` headers) by setting `GZIP_COMPRESSION_DISABLE_ON_AUTH=true`. This eliminates the side-channel entirely for sensitive traffic but may increase bandwidth usage.
+2.  **Compression Guard (Optional)**: For higher security, you can disable compression entirely for authenticated requests (requests containing `Cookie`, `Authorization`, or `X-Csrf-Token` headers) by setting `GZIP_COMPRESSION_DISABLE_ON_AUTH=true` and/or `BROTLI_COMPRESSION_DISABLE_ON_AUTH=true`. This eliminates the side-channel entirely for sensitive traffic but may increase bandwidth usage.
 
 By default, Thruster prioritizes performance while providing baseline protection via jitter. Operators with strict security requirements should consider enabling the Compression Guard.

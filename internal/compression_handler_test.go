@@ -22,8 +22,14 @@ func TestCompressionHandler(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	defaultOpts := CompressionOptions{
+		GzipEnabled:   true,
+		BrotliEnabled: true,
+	}
+
 	t.Run("compresses responses with gzip", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		opts := CompressionOptions{GzipEnabled: true, BrotliEnabled: false}
+		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip")
@@ -42,7 +48,8 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("compresses responses with brotli", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		opts := CompressionOptions{GzipEnabled: false, BrotliEnabled: true}
+		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "br")
@@ -58,8 +65,8 @@ func TestCompressionHandler(t *testing.T) {
 		assert.Equal(t, largeBody, string(body))
 	})
 
-	t.Run("prefers brotli over gzip when both are accepted", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+	t.Run("prefers brotli over gzip when both are accepted and enabled", func(t *testing.T) {
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -75,8 +82,34 @@ func TestCompressionHandler(t *testing.T) {
 		assert.Equal(t, largeBody, string(body))
 	})
 
+	t.Run("uses gzip when brotli is disabled", func(t *testing.T) {
+		opts := CompressionOptions{GzipEnabled: true, BrotliEnabled: false}
+		handler := NewCompressionHandler(opts, upstream)
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Accept-Encoding", "gzip, br")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
+	})
+
+	t.Run("uses brotli when gzip is disabled", func(t *testing.T) {
+		opts := CompressionOptions{GzipEnabled: false, BrotliEnabled: true}
+		handler := NewCompressionHandler(opts, upstream)
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Accept-Encoding", "gzip, br")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, "br", rr.Header().Get("Content-Encoding"))
+	})
+
 	t.Run("prefers brotli over gzip regardless of order", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "br, gzip")
@@ -88,7 +121,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("respects quality values - prefers gzip when it has higher quality", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "br;q=0.5, gzip;q=1.0")
@@ -100,7 +133,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("respects quality values - prefers brotli when it has higher quality", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip;q=0.8, br;q=1.0")
@@ -112,7 +145,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("handles q=0 (rejected encodings)", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "br;q=0, gzip")
@@ -124,7 +157,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("handles wildcard encoding", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "*")
@@ -137,7 +170,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("does not compress when no encoding is accepted", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		// No Accept-Encoding header
@@ -156,7 +189,7 @@ func TestCompressionHandler(t *testing.T) {
 			w.Write([]byte(smallBody))
 		})
 
-		handler := NewCompressionHandler(0, false, smallUpstream)
+		handler := NewCompressionHandler(defaultOpts, smallUpstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -175,7 +208,7 @@ func TestCompressionHandler(t *testing.T) {
 			w.Write([]byte(largeBody))
 		})
 
-		handler := NewCompressionHandler(0, false, encodedUpstream)
+		handler := NewCompressionHandler(defaultOpts, encodedUpstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -193,7 +226,7 @@ func TestCompressionHandler(t *testing.T) {
 			w.Write([]byte(largeBody))
 		})
 
-		handler := NewCompressionHandler(0, false, imageUpstream)
+		handler := NewCompressionHandler(defaultOpts, imageUpstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -205,7 +238,8 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("applies jitter when configured with gzip", func(t *testing.T) {
-		handler := NewCompressionHandler(32, false, upstream)
+		opts := CompressionOptions{GzipEnabled: true, GzipJitter: 32, BrotliEnabled: false}
+		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip")
@@ -227,8 +261,9 @@ func TestCompressionHandler(t *testing.T) {
 		assert.True(t, strings.HasPrefix(string(body), largeBody))
 	})
 
-	t.Run("wraps with guard when disableOnAuth is true", func(t *testing.T) {
-		handler := NewCompressionHandler(0, true, upstream)
+	t.Run("wraps with guard when gzip disableOnAuth is true", func(t *testing.T) {
+		opts := CompressionOptions{GzipEnabled: true, GzipDisableOnAuth: true, BrotliEnabled: true, BrotliDisableOnAuth: true}
+		handler := NewCompressionHandler(opts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -243,7 +278,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("compresses authenticated requests when disableOnAuth is false", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip, br")
@@ -257,7 +292,7 @@ func TestCompressionHandler(t *testing.T) {
 	})
 
 	t.Run("sets Vary header", func(t *testing.T) {
-		handler := NewCompressionHandler(0, false, upstream)
+		handler := NewCompressionHandler(defaultOpts, upstream)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "br")
@@ -273,32 +308,40 @@ func TestSelectEncoding(t *testing.T) {
 	tests := []struct {
 		name           string
 		acceptEncoding string
+		brotliEnabled  bool
+		gzipEnabled    bool
 		expected       string
 	}{
-		{"empty", "", ""},
-		{"gzip only", "gzip", "gzip"},
-		{"br only", "br", "br"},
-		{"both - gzip first", "gzip, br", "br"},
-		{"both - br first", "br, gzip", "br"},
-		{"gzip with spaces", "  gzip  ", "gzip"},
-		{"br with quality", "br;q=0.8", "br"},
-		{"gzip higher quality", "br;q=0.5, gzip;q=1.0", "gzip"},
-		{"br higher quality", "gzip;q=0.5, br;q=0.8", "br"},
-		{"equal quality prefers br", "gzip;q=1.0, br;q=1.0", "br"},
-		{"gzip rejected", "gzip;q=0, br", "br"},
-		{"br rejected", "br;q=0, gzip", "gzip"},
-		{"both rejected", "gzip;q=0, br;q=0", ""},
-		{"wildcard", "*", "br"},
-		{"wildcard with quality", "*;q=0.5", "br"},
-		{"deflate only (unsupported)", "deflate", ""},
-		{"identity (unsupported)", "identity", ""},
-		{"complex browser header", "gzip, deflate, br", "br"},
-		{"complex with qualities", "gzip;q=1.0, deflate;q=0.6, br;q=0.8", "gzip"},
+		{"empty", "", true, true, ""},
+		{"gzip only - both enabled", "gzip", true, true, "gzip"},
+		{"br only - both enabled", "br", true, true, "br"},
+		{"both - gzip first", "gzip, br", true, true, "br"},
+		{"both - br first", "br, gzip", true, true, "br"},
+		{"gzip with spaces", "  gzip  ", true, true, "gzip"},
+		{"br with quality", "br;q=0.8", true, true, "br"},
+		{"gzip higher quality", "br;q=0.5, gzip;q=1.0", true, true, "gzip"},
+		{"br higher quality", "gzip;q=0.5, br;q=0.8", true, true, "br"},
+		{"equal quality prefers br", "gzip;q=1.0, br;q=1.0", true, true, "br"},
+		{"gzip rejected", "gzip;q=0, br", true, true, "br"},
+		{"br rejected", "br;q=0, gzip", true, true, "gzip"},
+		{"both rejected", "gzip;q=0, br;q=0", true, true, ""},
+		{"wildcard", "*", true, true, "br"},
+		{"wildcard with quality", "*;q=0.5", true, true, "br"},
+		{"deflate only (unsupported)", "deflate", true, true, ""},
+		{"identity (unsupported)", "identity", true, true, ""},
+		{"complex browser header", "gzip, deflate, br", true, true, "br"},
+		{"complex with qualities", "gzip;q=1.0, deflate;q=0.6, br;q=0.8", true, true, "gzip"},
+		// Test with encodings disabled
+		{"brotli disabled - use gzip", "gzip, br", false, true, "gzip"},
+		{"gzip disabled - use brotli", "gzip, br", true, false, "br"},
+		{"both disabled", "gzip, br", false, false, ""},
+		{"brotli disabled - client only wants br", "br", false, true, ""},
+		{"gzip disabled - client only wants gzip", "gzip", true, false, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := selectEncoding(tt.acceptEncoding)
+			result := selectEncoding(tt.acceptEncoding, tt.brotliEnabled, tt.gzipEnabled)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

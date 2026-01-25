@@ -45,13 +45,25 @@ var brotliWriterPool = sync.Pool{
 	},
 }
 
-func NewCompressionHandler(jitter int, disableOnAuth bool, next http.Handler) http.Handler {
+// CompressionOptions configures the compression handler
+type CompressionOptions struct {
+	GzipEnabled         bool
+	GzipDisableOnAuth   bool
+	GzipJitter          int
+	BrotliEnabled       bool
+	BrotliDisableOnAuth bool
+}
+
+func NewCompressionHandler(opts CompressionOptions, next http.Handler) http.Handler {
 	handler := &compressionHandler{
-		jitter: jitter,
-		next:   next,
+		gzipEnabled:   opts.GzipEnabled,
+		gzipJitter:    opts.GzipJitter,
+		brotliEnabled: opts.BrotliEnabled,
+		next:          next,
 	}
 
-	if disableOnAuth {
+	// Apply compression guard if either encoding requires it
+	if (opts.GzipEnabled && opts.GzipDisableOnAuth) || (opts.BrotliEnabled && opts.BrotliDisableOnAuth) {
 		return NewCompressionGuardHandler(handler)
 	}
 
@@ -59,13 +71,15 @@ func NewCompressionHandler(jitter int, disableOnAuth bool, next http.Handler) ht
 }
 
 type compressionHandler struct {
-	jitter int
-	next   http.Handler
+	gzipEnabled   bool
+	gzipJitter    int
+	brotliEnabled bool
+	next          http.Handler
 }
 
 func (h *compressionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check what encodings the client accepts
-	encoding := selectEncoding(r.Header.Get("Accept-Encoding"))
+	encoding := selectEncoding(r.Header.Get("Accept-Encoding"), h.brotliEnabled, h.gzipEnabled)
 	if encoding == "" {
 		h.next.ServeHTTP(w, r)
 		return
@@ -74,7 +88,7 @@ func (h *compressionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cw := &compressResponseWriter{
 		ResponseWriter: w,
 		encoding:       encoding,
-		jitter:         h.jitter,
+		gzipJitter:     h.gzipJitter,
 		minSize:        minCompressSize,
 	}
 	defer cw.Close()
@@ -83,13 +97,13 @@ func (h *compressionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // selectEncoding parses the Accept-Encoding header and returns the best
-// supported encoding. Brotli is preferred over gzip.
-func selectEncoding(acceptEncoding string) string {
+// supported encoding. Brotli is preferred over gzip when both are enabled.
+func selectEncoding(acceptEncoding string, brotliEnabled, gzipEnabled bool) string {
 	if acceptEncoding == "" {
 		return ""
 	}
 
-	var hasBrotli, hasGzip bool
+	var clientSupportsBrotli, clientSupportsGzip bool
 	var brotliQ, gzipQ float64 = 1.0, 1.0
 
 	for _, part := range strings.Split(acceptEncoding, ",") {
@@ -103,31 +117,35 @@ func selectEncoding(acceptEncoding string) string {
 
 		switch encoding {
 		case encodingBrotli:
-			hasBrotli = true
+			clientSupportsBrotli = true
 			brotliQ = q
 		case encodingGzip:
-			hasGzip = true
+			clientSupportsGzip = true
 			gzipQ = q
 		case "*":
 			// Wildcard matches any encoding
-			if !hasBrotli {
-				hasBrotli = true
+			if !clientSupportsBrotli {
+				clientSupportsBrotli = true
 				brotliQ = q
 			}
-			if !hasGzip {
-				hasGzip = true
+			if !clientSupportsGzip {
+				clientSupportsGzip = true
 				gzipQ = q
 			}
 		}
 	}
 
-	// Skip encodings with q=0 (explicitly rejected)
-	if hasBrotli && brotliQ == 0 {
-		hasBrotli = false
+	// Skip encodings with q=0 (explicitly rejected by client)
+	if clientSupportsBrotli && brotliQ == 0 {
+		clientSupportsBrotli = false
 	}
-	if hasGzip && gzipQ == 0 {
-		hasGzip = false
+	if clientSupportsGzip && gzipQ == 0 {
+		clientSupportsGzip = false
 	}
+
+	// Check what's actually available (client supports AND server enabled)
+	hasBrotli := clientSupportsBrotli && brotliEnabled
+	hasGzip := clientSupportsGzip && gzipEnabled
 
 	// Prefer brotli over gzip when both are available with equal quality
 	if hasBrotli && hasGzip {
@@ -169,7 +187,7 @@ func parseEncodingWithQuality(s string) (encoding string, quality float64) {
 type compressResponseWriter struct {
 	http.ResponseWriter
 	encoding    string
-	jitter      int
+	gzipJitter  int
 	minSize     int
 	writer      io.WriteCloser
 	wroteHeader bool
@@ -252,7 +270,7 @@ func (w *compressResponseWriter) startCompression() {
 	case encodingGzip:
 		gw := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(w.ResponseWriter)
-		w.writer = &gzipWriterWithJitter{Writer: gw, jitter: w.jitter}
+		w.writer = &gzipWriterWithJitter{Writer: gw, jitter: w.gzipJitter}
 	}
 
 	w.flushHeader()

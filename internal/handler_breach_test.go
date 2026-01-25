@@ -32,6 +32,7 @@ func TestHandler_BreachMitigation(t *testing.T) {
 		gzipCompressionEnabled:       true,
 		gzipCompressionDisableOnAuth: false,
 		gzipCompressionJitter:        32,
+		brotliCompressionEnabled:     false, // Disable brotli for gzip-specific tests
 	}
 
 	handler := NewHandler(opts)
