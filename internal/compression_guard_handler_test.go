@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/klauspost/compress/gzhttp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -101,9 +100,9 @@ func TestCompressionGuardHandler(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			if tt.wantNoCompress {
-				assert.Equal(t, "1", rr.Header().Get(gzhttp.HeaderNoCompression))
+				assert.Equal(t, "1", rr.Header().Get(HeaderNoCompression))
 			} else {
-				assert.Empty(t, rr.Header().Get(gzhttp.HeaderNoCompression))
+				assert.Empty(t, rr.Header().Get(HeaderNoCompression))
 			}
 		})
 	}
