@@ -31,33 +31,10 @@ func (h *StaticFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Clean the URL path to prevent directory traversal
 	urlPath := path.Clean(r.URL.Path)
-	if urlPath == "/" {
-		h.next.ServeHTTP(w, r)
-		return
-	}
 
-	// Build the file path
-	filePath := filepath.Join(h.path, urlPath)
-
-	// Ensure the resolved path is within the static directory (prevent directory traversal)
-	absStaticPath, err := filepath.Abs(h.path)
-	if err != nil {
-		h.next.ServeHTTP(w, r)
-		return
-	}
-	absFilePath, err := filepath.Abs(filePath)
-	if err != nil {
-		h.next.ServeHTTP(w, r)
-		return
-	}
-	if !strings.HasPrefix(absFilePath, absStaticPath) {
-		h.next.ServeHTTP(w, r)
-		return
-	}
-
-	// Check if the original file exists
-	originalInfo, err := os.Stat(filePath)
-	if err != nil || originalInfo.IsDir() {
+	// Find the file to serve (checks path, path.html, path/index.html)
+	filePath, found := h.findFile(urlPath)
+	if !found {
 		h.next.ServeHTTP(w, r)
 		return
 	}
@@ -70,6 +47,48 @@ func (h *StaticFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Serve the original file
 	slog.Debug("Static file serving", "path", filePath)
 	http.ServeFile(w, r, filePath)
+}
+
+// findFile looks for a file matching the URL path.
+// It checks in order: path, path.html, path/index.html
+// Returns the file path and true if found, empty string and false otherwise.
+func (h *StaticFileHandler) findFile(urlPath string) (string, bool) {
+	// Ensure the path is within the static directory
+	absStaticPath, err := filepath.Abs(h.path)
+	if err != nil {
+		return "", false
+	}
+
+	// Candidates to check, in order of priority (matching Rails behavior)
+	candidates := []string{
+		urlPath,
+		urlPath + ".html",
+		path.Join(urlPath, "index.html"),
+	}
+
+	for _, candidate := range candidates {
+		filePath := filepath.Join(h.path, candidate)
+
+		// Resolve to absolute path and verify it's within static directory
+		absFilePath, err := filepath.Abs(filePath)
+		if err != nil {
+			continue
+		}
+		if !strings.HasPrefix(absFilePath+string(filepath.Separator), absStaticPath+string(filepath.Separator)) &&
+			absFilePath != absStaticPath {
+			continue
+		}
+
+		// Check if file exists and is not a directory
+		info, err := os.Stat(filePath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		return filePath, true
+	}
+
+	return "", false
 }
 
 // servePrecompressed attempts to serve a precompressed version of the file.

@@ -30,6 +30,78 @@ func TestStaticFileHandler_serves_static_file(t *testing.T) {
 	assert.Equal(t, string(fixtureContent("hello.txt")), w.Body.String())
 }
 
+func TestStaticFileHandler_serves_html_extension_fallback(t *testing.T) {
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Should not reach upstream for static file")
+	})
+
+	h := NewStaticFileHandler("fixtures", upstream)
+
+	// Request /about should serve /about.html
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/about", nil)
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
+	assert.Equal(t, "<html>about</html>\n", w.Body.String())
+}
+
+func TestStaticFileHandler_serves_index_html_for_directory(t *testing.T) {
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Should not reach upstream for static file")
+	})
+
+	h := NewStaticFileHandler("fixtures", upstream)
+
+	// Request /subdir should serve /subdir/index.html
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/subdir", nil)
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
+	assert.Equal(t, "<html>index</html>\n", w.Body.String())
+}
+
+func TestStaticFileHandler_serves_index_html_for_directory_with_trailing_slash(t *testing.T) {
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Should not reach upstream for static file")
+	})
+
+	h := NewStaticFileHandler("fixtures", upstream)
+
+	// Request /subdir/ should serve /subdir/index.html
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/subdir/", nil)
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
+	assert.Equal(t, "<html>index</html>\n", w.Body.String())
+}
+
+func TestStaticFileHandler_prefers_exact_file_over_html_extension(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create both "test" and "test.html"
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "test"), []byte("exact file"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "test.html"), []byte("html file"), 0644))
+
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Should not reach upstream for static file")
+	})
+
+	h := NewStaticFileHandler(tempDir, upstream)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "exact file", w.Body.String())
+}
+
 func TestStaticFileHandler_serves_gzip_precompressed(t *testing.T) {
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("Should not reach upstream for static file")
@@ -181,7 +253,11 @@ func TestStaticFileHandler_passes_through_when_file_not_found(t *testing.T) {
 	assert.Equal(t, "upstream response", w.Body.String())
 }
 
-func TestStaticFileHandler_passes_through_for_root_path(t *testing.T) {
+func TestStaticFileHandler_passes_through_for_root_path_without_index(t *testing.T) {
+	// Create a temp dir without index.html
+	tempDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "other.txt"), []byte("other"), 0644))
+
 	upstreamCalled := false
 	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamCalled = true
@@ -189,13 +265,31 @@ func TestStaticFileHandler_passes_through_for_root_path(t *testing.T) {
 		w.Write([]byte("upstream response"))
 	})
 
-	h := NewStaticFileHandler("fixtures", upstream)
+	h := NewStaticFileHandler(tempDir, upstream)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/", nil)
 	h.ServeHTTP(w, r)
 
 	assert.True(t, upstreamCalled)
+}
+
+func TestStaticFileHandler_serves_index_html_for_root_path(t *testing.T) {
+	tempDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>root</html>"), 0644))
+
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Should not reach upstream when index.html exists")
+	})
+
+	h := NewStaticFileHandler(tempDir, upstream)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "<html>root</html>", w.Body.String())
 }
 
 func TestStaticFileHandler_passes_through_for_non_GET_methods(t *testing.T) {
