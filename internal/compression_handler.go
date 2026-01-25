@@ -265,11 +265,11 @@ func (w *compressResponseWriter) startCompression() {
 	case encodingBrotli:
 		bw := brotliWriterPool.Get().(*brotli.Writer)
 		bw.Reset(w.ResponseWriter)
-		w.writer = bw
+		w.writer = &writerWithJitter{writer: bw, jitter: w.jitter}
 	case encodingGzip:
 		gw := gzipWriterPool.Get().(*gzip.Writer)
 		gw.Reset(w.ResponseWriter)
-		w.writer = &gzipWriterWithJitter{Writer: gw, jitter: w.jitter}
+		w.writer = &writerWithJitter{writer: gw, jitter: w.jitter}
 	}
 
 	w.flushHeader()
@@ -315,14 +315,16 @@ func (w *compressResponseWriter) Close() error {
 		err := w.writer.Close()
 
 		// Return writers to pools
-		switch w.encoding {
-		case encodingBrotli:
-			if bw, ok := w.writer.(*brotli.Writer); ok {
-				brotliWriterPool.Put(bw)
-			}
-		case encodingGzip:
-			if gwj, ok := w.writer.(*gzipWriterWithJitter); ok {
-				gzipWriterPool.Put(gwj.Writer)
+		if wj, ok := w.writer.(*writerWithJitter); ok {
+			switch w.encoding {
+			case encodingBrotli:
+				if bw, ok := wj.writer.(*brotli.Writer); ok {
+					brotliWriterPool.Put(bw)
+				}
+			case encodingGzip:
+				if gw, ok := wj.writer.(*gzip.Writer); ok {
+					gzipWriterPool.Put(gw)
+				}
 			}
 		}
 
@@ -361,24 +363,28 @@ func (w *compressResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 
-// gzipWriterWithJitter wraps a gzip.Writer to add random jitter for BREACH mitigation
-type gzipWriterWithJitter struct {
-	*gzip.Writer
+// writerWithJitter wraps a compressor to add random jitter for BREACH mitigation
+type writerWithJitter struct {
+	writer      io.WriteCloser
 	jitter      int
 	jitterAdded bool
 }
 
-func (w *gzipWriterWithJitter) Close() error {
+func (w *writerWithJitter) Write(p []byte) (int, error) {
+	return w.writer.Write(p)
+}
+
+func (w *writerWithJitter) Close() error {
 	// Add jitter before closing
 	if w.jitter > 0 && !w.jitterAdded {
 		w.jitterAdded = true
 		jitterSize := rand.Intn(w.jitter + 1)
 		if jitterSize > 0 {
 			jitterBytes := make([]byte, jitterSize)
-			w.Writer.Write(jitterBytes)
+			w.writer.Write(jitterBytes)
 		}
 	}
-	return w.Writer.Close()
+	return w.writer.Close()
 }
 
 // isCompressibleContentType returns true if the content type should be compressed
